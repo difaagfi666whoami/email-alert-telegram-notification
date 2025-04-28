@@ -1,0 +1,260 @@
+{
+  "name": "emails summaries",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "*"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        40,
+        -40
+      ],
+      "id": "2089cb57-e493-47a0-abc8-618dab541f10",
+      "name": "Telegram Trigger",
+      "webhookId": "79ce0a21-9db8-4752-8c41-08af82e89ed7",
+      "credentials": {
+        "telegramApi": {
+          "id": "w0aRdy7dzR3Lkx02",
+          "name": "Telegram alertdaily"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "disable_web_page_preview": true
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1700,
+        -40
+      ],
+      "id": "4c7048c2-c829-412c-805f-18c0114ca514",
+      "name": "Telegram",
+      "webhookId": "caf92e14-7a8a-4cbd-99f1-575f062e1303",
+      "credentials": {
+        "telegramApi": {
+          "id": "w0aRdy7dzR3Lkx02",
+          "name": "Telegram alertdaily"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.message.text }}",
+        "options": {
+          "systemMessage": "=You are an assistant that converts natural language to SQL.\nGiven a user's message and the database schema: \n\nTable: email_logs\n- sender (text)\n- subject (text)\n- body (text)\n- time_received (timestamp)\n\nplease give straight forward output without additional \"`\" to prevent error\n\nConvert this message to a valid PostgreSQL query:\n\"{{ $json.message }}\"\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        220,
+        -40
+      ],
+      "id": "358f1a0d-e1d3-4730-ada4-773dad5ea349",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1-mini"
+        },
+        "options": {
+          "responseFormat": "text",
+          "temperature": 0.5
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        860,
+        280
+      ],
+      "id": "20ab8a35-81e4-4497-ae81-e4466908cd87",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "NgKRbNNvuTJQ5AnF",
+          "name": "OpenAi account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.output }}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        660,
+        -40
+      ],
+      "id": "d6c99a84-ae87-491d-8f7b-312123774f15",
+      "name": "Postgres",
+      "alwaysOutputData": false,
+      "credentials": {
+        "postgres": {
+          "id": "FGXgkDpuV66X2xUm",
+          "name": "neon postgres"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Aggregate').item.json.data }}",
+        "options": {
+          "systemMessage": "=Please summarize the following error logs and highlight important patterns, repeated issues, and anomalies. Be concise and use bullet points and bold text if helpful. Please format the following log data as bullet points, with each point in bold to highlight key information for easier understanding. Group the details under appropriate categories. No Abbreviations for clearly informations.\n\n{{ $('Aggregate').item.json.data }}\n\nsent a single message like example below:\nDaily Error Summary (April 2, 2025)\n12 messages mention: Market Disconnected\n10 messages report: Application is not running\n5 messages: ODBC SQL Server Error\nRare alert detected: Instrument record not found\n\n\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        1080,
+        -40
+      ],
+      "id": "7dc60901-9199-4674-b23a-3152d8ec07c9",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        880,
+        -40
+      ],
+      "id": "76f7effe-16f8-4513-9f92-1a7fd5d460b8",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Assume the full message is stored in 'fullMessage'\nconst fullMessage = $input.first().json.output;\n\n// Define the maximum length of a Telegram message\nconst maxLength = 2048;\n\n// Split the full message into chunks of maxLength\nlet messageChunks = [];\nfor (let i = 0; i < fullMessage.length; i += maxLength) {\n  messageChunks.push(fullMessage.slice(i, i + maxLength));\n}\n\n// Return the chunks as separate items for the next node\nreturn messageChunks.map(chunk => {\n  return {\n    json: {\n      message: chunk\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        -40
+      ],
+      "id": "05f300e5-b73c-4b82-ad04-528f28df1acc",
+      "name": "Code"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Postgres",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "d5f9c80a-db99-4860-8c36-aa66e2510ed3",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b4c5dbc4871f62872d661a0c6027cc73202341b828fa39a67ff7c37e76c3fa2c"
+  },
+  "id": "Dc8XBKFzQEYbtZAi",
+  "tags": []
+}
