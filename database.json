@@ -1,0 +1,151 @@
+{
+  "name": "database",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "alertdaily",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "91acc6ae-7b62-4903-a0a6-464820418405",
+      "name": "Webhook",
+      "webhookId": "1cde8658-e724-451c-aca4-61c2b05e9f6b"
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "emails",
+          "mode": "list",
+          "cachedResultName": "emails"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "sender": "={{ $json.body[0].sender }}",
+            "time_received": "={{ $json.body[0].time_received }}",
+            "uid": "={{ $json.body[0].uid }}",
+            "subject": "={{ $json.body[0].subject }}",
+            "body": "={{ $json.body[0].body }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "uid",
+              "displayName": "uid",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "sender",
+              "displayName": "sender",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "subject",
+              "displayName": "subject",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "body",
+              "displayName": "body",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "time_received",
+              "displayName": "time_received",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        240,
+        0
+      ],
+      "id": "262003f8-0134-4a75-9f1a-a5ab596d9b0f",
+      "name": "Postgres",
+      "credentials": {
+        "postgres": {
+          "id": "FGXgkDpuV66X2xUm",
+          "name": "neon postgres"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Postgres",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "6ae9a1cd-dc42-4420-896a-e471429e3f0e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b4c5dbc4871f62872d661a0c6027cc73202341b828fa39a67ff7c37e76c3fa2c"
+  },
+  "id": "vkGG7cx2GqyRzCb3",
+  "tags": []
+}
