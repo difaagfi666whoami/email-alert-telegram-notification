@@ -1,0 +1,477 @@
+{
+  "name": "email alert queue",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE email_logs SET status = 'ok' WHERE id = {{ $('Set Original ID').item.json.id }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1960,
+        -240
+      ],
+      "id": "5278e209-a260-4117-99e9-efc2e8fd676b",
+      "name": "Mark as OK",
+      "credentials": {
+        "postgres": {
+          "id": "FGXgkDpuV66X2xUm",
+          "name": "neon postgres"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH next_email AS (\n  SELECT id\n  FROM email_logs\n  WHERE status IN ('pending', 'processing')\n    AND (last_attempt IS NULL OR last_attempt < NOW() - INTERVAL '2 minutes')\n  ORDER BY time_received ASC\n  FOR UPDATE SKIP LOCKED\n  LIMIT 1\n)\nUPDATE email_logs\nSET status = 'processing', last_attempt = NOW()\nFROM next_email\nWHERE email_logs.id = next_email.id\nRETURNING email_logs.*;\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        60,
+        280
+      ],
+      "id": "4180aa6f-bbc4-4e41-a030-f7128fc0134b",
+      "name": "Fetch Next Pending",
+      "credentials": {
+        "postgres": {
+          "id": "FGXgkDpuV66X2xUm",
+          "name": "neon postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE email_logs SET status = 'pending' WHERE id = {{ $('Set Original ID').item.json.id }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1960,
+        140
+      ],
+      "id": "15a5a91b-0618-4e48-9883-2c14ce9b6586",
+      "name": "Reset to Pending",
+      "credentials": {
+        "postgres": {
+          "id": "FGXgkDpuV66X2xUm",
+          "name": "neon postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "text": "={{ $('Fetch Next Pending').item.json.body }}",
+        "schemaType": "fromJson",
+        "jsonSchemaExample": "{\n  \"server_ip\":\"198.1.2.212\",\n  \"server_name\":\"FIX-LH-OUT-00\",\n  \"message_id\": \"8010\",\n  \"message_text\": \"Market not connected\"\n}",
+        "options": {
+          "systemPromptTemplate": "You are an expert extraction algorithm.\nOnly extract relevant information from the text.\n\nserver_ip: The IP Address after Server IP Address: (e.g., 198.1.2.212).\nserver_name: The Server Name after Server Name: (e.g., FIX-LH-OUT-00).\nmessage_id: The ID after Message: id: (e.g., 8010).\nmessage_text: The text after msg: (e.g., Market not connected)."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.informationExtractor",
+      "typeVersion": 1,
+      "position": [
+        720,
+        -40
+      ],
+      "id": "149da7f7-3ed8-4eca-8538-86677b239be1",
+      "name": "Information Extractor"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1080,
+        580
+      ],
+      "id": "773139e3-88f0-468c-a496-4d9ac383f227",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "NgKRbNNvuTJQ5AnF",
+          "name": "OpenAi account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e4507f0f-dcc1-4182-8c4e-45e24706819f",
+              "leftValue": "={{ $('Fetch Next Pending').item.json.body }}",
+              "rightValue": "8010",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {
+          "ignoreCase": true
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1080,
+        -40
+      ],
+      "id": "15df715f-7efa-471e-a490-943f44ab1221",
+      "name": "Check Minor Alert"
+    },
+    {
+      "parameters": {
+        "inputText": "={{ $('Fetch Next Pending').item.json.body }}",
+        "categories": {
+          "categories": [
+            {
+              "category": "warning, critical",
+              "description": "unknown alert incoming"
+            }
+          ]
+        },
+        "options": {
+          "systemPromptTemplate": "=Provide sample emails for each category to train the model. For example:\nWarning: Emails with phrases like \"Instrument record not found\" or less severe issues.\nCritical: Emails with phrases like \"Application is not running\" or \"RMS is not online!\".\n\nAlternatively, use keyword-based rules if training data isn’t available:\nIf the body contains \"Application is not running\", \"RMS is not online!\", or \"Severity: high\", classify as critical.\n\nOtherwise, classify as warning."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.textClassifier",
+      "typeVersion": 1,
+      "position": [
+        1260,
+        140
+      ],
+      "id": "22ac0bc4-bdc8-4f07-afec-9ee8da5f3e79",
+      "name": "Classify Alert Severity"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f3d121a6-83f4-4855-9473-b0405e8c03c1",
+              "leftValue": "={{$('Fetch Next Pending').item.json.subject}}",
+              "rightValue": "GMO",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        600,
+        280
+      ],
+      "id": "bc4f0b27-0ed7-4e0a-9ad5-8859672c8fea",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "chatId": "-1002621101708",
+        "text": "=⚠️ *Warning Alert*⚠️ \n*Alert ID* : {{ $('Fetch Next Pending').item.json.id }}\n*Subject*  : {{$('Fetch Next Pending').item.json.subject}}\n*Time Received* : {{ $('Fetch Next Pending').item.json.time_received }}\n*Server Name* : {{ $('Information Extractor').item.json.output.server_name }}\n*Server IP*   : {{ $('Information Extractor').item.json.output.server_ip }}\n*Error msg*   : {{ $('Information Extractor').item.json.output.message_id }} {{ $('Information Extractor').item.json.output.message_text }}\n\n",
+        "additionalFields": {
+          "message_thread_id": 2706
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1260,
+        -220
+      ],
+      "id": "f9bfa3cb-db07-49d2-bcf9-9e5b3fc9bed1",
+      "name": "Telegram Minor Alert",
+      "webhookId": "bb1aeeff-5a89-437f-88ee-99ff9b57141f",
+      "credentials": {
+        "telegramApi": {
+          "id": "w0aRdy7dzR3Lkx02",
+          "name": "Telegram alertdaily"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "-1002621101708",
+        "text": "=🚫 *Critical Alert*🚫 \n*Alert ID* : {{ $('Fetch Next Pending').item.json.id }}\n*Subject*  : {{$('Fetch Next Pending').item.json.subject}}\n*Time Received* : {{ $('Fetch Next Pending').item.json.time_received }}\n*Server Name* : {{ $('Information Extractor').item.json.output.server_name }}\n*Server IP*   : {{ $('Information Extractor').item.json.output.server_ip }}\n*Error msg*   : {{ $('Information Extractor').item.json.output.message_id }} {{ $('Information Extractor').item.json.output.message_text }}\n\n",
+        "additionalFields": {
+          "message_thread_id": 2708
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1640,
+        140
+      ],
+      "id": "9fb73b96-66af-468c-ae43-68fa198458d7",
+      "name": "Telegram Critical Alert",
+      "webhookId": "bb1aeeff-5a89-437f-88ee-99ff9b57141f",
+      "credentials": {
+        "telegramApi": {
+          "id": "w0aRdy7dzR3Lkx02",
+          "name": "Telegram alertdaily"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f1f2be5f-3c7c-449a-902e-db5a17f5477c",
+              "name": "id",
+              "value": "={{ $json.id }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        340,
+        280
+      ],
+      "id": "088af139-6b79-4288-a1c9-8c457bc8d7d6",
+      "name": "Set Original ID"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "seconds",
+              "secondsInterval": 5
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -140,
+        280
+      ],
+      "id": "2009f657-1af4-4490-8b77-a80f968160aa",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1020,
+        -280
+      ],
+      "id": "114b2e60-10b5-4c58-ab29-0fc703079f12",
+      "name": "Edit Fields"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Fetch Next Pending": {
+      "main": [
+        [
+          {
+            "node": "Set Original ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark as OK": {
+      "main": [
+        [],
+        []
+      ]
+    },
+    "Reset to Pending": {
+      "main": [
+        []
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Information Extractor",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Classify Alert Severity",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Information Extractor": {
+      "main": [
+        [
+          {
+            "node": "Check Minor Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Minor Alert": {
+      "main": [
+        [
+          {
+            "node": "Telegram Minor Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Classify Alert Severity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Information Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark as OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Minor Alert": {
+      "main": [
+        [
+          {
+            "node": "Mark as OK",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reset to Pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Alert Severity": {
+      "main": [
+        [
+          {
+            "node": "Telegram Critical Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Critical Alert": {
+      "main": [
+        [
+          {
+            "node": "Mark as OK",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reset to Pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Original ID": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Next Pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "47cb28fa-947a-418c-a453-5b309a39178f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b4c5dbc4871f62872d661a0c6027cc73202341b828fa39a67ff7c37e76c3fa2c"
+  },
+  "id": "TcyuA7Qnusnf8Y5Y",
+  "tags": []
+}
